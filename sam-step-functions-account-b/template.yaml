@@ -69,23 +69,10 @@ Resources:
       Properties:
         Definition:
           Comment: A description of my state machine
-          StartAt: State Machine B Invoke
+          StartAt: Task 1
           States:
-            State Machine B Invoke:
-              Type: Task
-              Resource: 'arn:aws:states:::apigateway:invoke'
-              Parameters:
-                ApiEndpoint.$: $.ApiUrl
-                Method: POST
-                Stage: dev
-                Path: /execution
-                Headers: {}
-                RequestBody:
-                  Payload:
-                    input.$: $.body
-                    name: CrossAccountExecution
-                    stateMachineArn.$: $.stateMachineArn
-                AuthType: RESOURCE_POLICY
+            Task 1:
+              Type: Pass
               End: true
         Role: !GetAtt StepFunctionsRole.Arn
         Tracing:
