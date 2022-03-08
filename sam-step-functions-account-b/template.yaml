@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM Template for step-functions-account-b
+
+Parameters:
+  SourceStateMachineArn:
+    Type: String
+
+Resources:
+    ApiGatewayAPI2:
+      Type: AWS::Serverless::Api
+      Properties:
+        DefinitionBody: 
+          !Sub |
+          ---
+          swagger: "2.0"
+          info:
+            version: "2022-02-17T20:50:30Z"
+            title: "StartExecutionAPI"
+          basePath: "/dev"
+          schemes:
+          - "https"
+          paths:
+            /execution:
+              post:
+                produces:
+                - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    schema:
+                      $ref: "#/definitions/Empty"
+                security:
+                - sigv4: []
+                x-amazon-apigateway-integration:
+                  credentials: ${ApiGatewayRole.Arn}
+                  httpMethod: "POST"
+                  uri: "arn:aws:apigateway:${AWS::Region}:states:action/StartExecution"
+                  responses:
+                    default:
+                      statusCode: "200"
+                  passthroughBehavior: "when_no_match"
+                  type: "aws"
+          securityDefinitions:
+            sigv4:
+              type: "apiKey"
+              name: "Authorization"
+              in: "header"
+              x-amazon-apigateway-authtype: "awsSigv4"
+          definitions:
+            Empty:
+              type: "object"
+              title: "Empty Schema"
+          x-amazon-apigateway-policy:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Principal:
+                Service: "states.amazonaws.com"
+              Action: "execute-api:Invoke"
+              Resource: "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/*/*"
+              Condition:
+                StringEquals:
+                  aws:SourceArn: "${SourceStateMachineArn}"
+        StageName: dev
+
+    DestinationStateMachine:
+      Type: AWS::Serverless::StateMachine
+      Properties:
+        Definition:
+          Comment: A description of my state machine
+          StartAt: State Machine B Invoke
+          States:
+            State Machine B Invoke:
+              Type: Task
+              Resource: 'arn:aws:states:::apigateway:invoke'
+              Parameters:
+                ApiEndpoint.$: $.ApiUrl
+                Method: POST
+                Stage: dev
+                Path: /execution
+                Headers: {}
+                RequestBody:
+                  Payload:
+                    input.$: $.body
+                    name: CrossAccountExecution
+                    stateMachineArn.$: $.stateMachineArn
+                AuthType: RESOURCE_POLICY
+              End: true
+        Role: !GetAtt StepFunctionsRole.Arn
+        Tracing:
+          Enabled: true
+          
+    StepFunctionsRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: 
+                  - states.amazonaws.com
+              Action: 'sts:AssumeRole'
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+          
+    ApiGatewayRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: 
+                  - apigateway.amazonaws.com
+              Action: 'sts:AssumeRole'
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+          - 'arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess'
+
+Outputs:
+  StepFunctionAccountB:
+    Description: "Step Function State machine ARN"
+    Value: !Sub "${DestinationStateMachine}"
+  
+  ApiGatewayAPI:
+    Description: "API Url"
+    Value: !Sub "${ApiGatewayAPI2}.execute-api.${AWS::Region}.amazonaws.com"

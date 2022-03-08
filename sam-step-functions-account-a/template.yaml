@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM Template for step-functions-account-a
+
+Resources:
+    SourceStateMachine:
+      Type: AWS::Serverless::StateMachine
+      Properties:
+        Definition:
+          Comment: A description of my state machine
+          StartAt: State Machine B Invoke
+          States:
+            State Machine B Invoke:
+              Type: Task
+              Resource: 'arn:aws:states:::apigateway:invoke'
+              Parameters:
+                ApiEndpoint.$: $.ApiUrl
+                Method: POST
+                Stage: dev
+                Path: /execution
+                Headers: {}
+                RequestBody:
+                  input.$: $.body
+                  stateMachineArn.$: $.stateMachineArn
+                AuthType: RESOURCE_POLICY
+              End: true
+        Role: !GetAtt GenericRole.Arn
+        Tracing:
+          Enabled: true
+          
+    GenericRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: 
+                  - states.amazonaws.com
+              Action: 'sts:AssumeRole'
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess'
+          - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+
+Outputs:
+  StepFunctionAccountA:
+    Description: "Step Function State machine ARN"
+    Value: !Sub "${SourceStateMachine}"
+  
